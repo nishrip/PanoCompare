@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panorama Split Slider</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r110/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/panolens@0.12.0/build/panolens.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden; background: black; font-family: Arial, sans-serif;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+    }
+    /* Both panorama viewers stacked */
+    #viewerBefore, #viewerAfter {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      overflow: hidden;
+    }
+    /* Clip top panorama (after) to the left of slider */
+    #viewerAfter {
+      clip-path: inset(0 0 0 50%);
+      pointer-events: none; /* disable interaction on top viewer */
+    }
+
+    /* Slider vertical line and arrows container */
+    #slider {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      height: 100%;
+      width: 4px;
+      background: rgba(255,255,255,0.8);
+      cursor: ew-resize;
+      z-index: 10;
+      user-select: none;
+    }
+    #slider::before, #slider::after {
+      content: "";
+      position: absolute;
+      width: 0; height: 0;
+      border-style: solid;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    #slider::before {
+      left: -12px;
+      border-width: 8px 10px 8px 0;
+      border-color: transparent rgba(255,255,255,0.8) transparent transparent;
+    }
+    #slider::after {
+      right: -12px;
+      border-width: 8px 0 8px 10px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.8);
+    }
+  </style>
+</head>
+<body>
+
+<div id="container">
+  <div id="viewerBefore"></div>
+  <div id="viewerAfter"></div>
+  <div id="slider"></div>
+</div>
+
+<script>
+  // Setup viewers
+  const containerBefore = document.getElementById('viewerBefore');
+  const containerAfter = document.getElementById('viewerAfter');
+  const slider = document.getElementById('slider');
+  const container = document.getElementById('container');
+
+  // Initialize two Panolens viewers, each in their container div
+  const viewerBefore = new PANOLENS.Viewer({
+    container: containerBefore,
+    controlBar: false,
+    autoHideInfospot: false,
+    output: 'console'
+  });
+  const viewerAfter = new PANOLENS.Viewer({
+    container: containerAfter,
+    controlBar: false,
+    autoHideInfospot: false,
+    output: 'console'
+  });
+
+  // Load panoramas
+  const panoramaBefore = new PANOLENS.ImagePanorama('before.jpg');
+  const panoramaAfter = new PANOLENS.ImagePanorama('after.jpg');
+
+  viewerBefore.add(panoramaBefore);
+  viewerAfter.add(panoramaAfter);
+
+  // Disable interaction on the top viewer (after)
+  viewerAfter.control.enabled = false;
+
+  function syncCameras() {
+    // Sync orientation
+    viewerAfter.camera.position.copy(viewerBefore.camera.position);
+    viewerAfter.camera.quaternion.copy(viewerBefore.camera.quaternion);
+
+    // Sync zoom / field of view
+    viewerAfter.camera.fov = viewerBefore.camera.fov;
+    viewerAfter.camera.updateProjectionMatrix();
+
+    requestAnimationFrame(syncCameras);
+}
+syncCameras();
+
+  // Slider drag logic
+  let isDragging = false;
+
+  slider.addEventListener('mousedown', startDrag);
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('mousemove', onDrag);
+
+  // Touch events for mobile
+  slider.addEventListener('touchstart', startDrag, {passive:false});
+  window.addEventListener('touchend', stopDrag);
+  window.addEventListener('touchmove', onDrag, {passive:false});
+
+  function startDrag(e) {
+    e.preventDefault();
+    isDragging = true;
+  }
+
+  function stopDrag(e) {
+    if (isDragging) {
+      e.preventDefault();
+      isDragging = false;
+    }
+  }
+
+  function onDrag(e) {
+    if (!isDragging) return;
+
+    e.preventDefault();
+    let clientX = e.clientX;
+    if (e.touches) clientX = e.touches[0].clientX;
+
+    // Clamp slider position between 0 and container width
+    const rect = container.getBoundingClientRect();
+    let posX = clientX - rect.left;
+    if (posX < 0) posX = 0;
+    if (posX > rect.width) posX = rect.width;
+
+    // Move slider line
+    slider.style.left = posX + 'px';
+
+    // Adjust clip-path on the top panorama viewer accordingly
+    containerAfter.style.clipPath = `inset(0 0 0 ${posX}px)`;
+  }
+</script>
+
+</body>
+</html>
