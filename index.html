@@ -1,165 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Panorama Split Slider</title>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r110/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/panolens@0.12.0/build/panolens.min.js"></script>
-
-  <style>
-    html, body {
-      margin: 0; padding: 0; height: 100%; overflow: hidden; background: black; font-family: Arial, sans-serif;
-    }
-    #container {
-      width: 100vw;
-      height: 100vh;
-      position: relative;
-      overflow: hidden;
-      touch-action: none;
-      user-select: none;
-    }
-    /* Both panorama viewers stacked */
-    #viewerBefore, #viewerAfter {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      overflow: hidden;
-    }
-    /* Clip top panorama (after) to the left of slider */
-    #viewerAfter {
-      clip-path: inset(0 0 0 50%);
-      pointer-events: none; /* disable interaction on top viewer */
-    }
-
-    /* Slider vertical line and arrows container */
-    #slider {
-      position: absolute;
-      top: 0; left: 50%;
-      transform: translateX(-50%);
-      height: 100%;
-      width: 4px;
-      background: rgba(255,255,255,0.8);
-      cursor: ew-resize;
-      z-index: 10;
-      user-select: none;
-    }
-    #slider::before, #slider::after {
-      content: "";
-      position: absolute;
-      width: 0; height: 0;
-      border-style: solid;
-      top: 50%;
-      transform: translateY(-50%);
-    }
-    #slider::before {
-      left: -12px;
-      border-width: 8px 10px 8px 0;
-      border-color: transparent rgba(255,255,255,0.8) transparent transparent;
-    }
-    #slider::after {
-      right: -12px;
-      border-width: 8px 0 8px 10px;
-      border-color: transparent transparent transparent rgba(255,255,255,0.8);
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smooth Scroll Image Sequence</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #111;
+  height: 100%;
+  min-height: 8000px;
+  overflow-x: hidden;
+}
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+h1 {
+  position: relative;
+  z-index: 10;
+  color: white;
+  padding: 2rem;
+}
+</style>
 </head>
 <body>
-
-<div id="container">
-  <div id="viewerBefore"></div>
-  <div id="viewerAfter"></div>
-  <div id="slider"></div>
-</div>
+<h1>Scroll down to scrub 251 frames smoothly</h1>
+<canvas id="sequence"></canvas>
 
 <script>
-  // Setup viewers
-  const containerBefore = document.getElementById('viewerBefore');
-  const containerAfter = document.getElementById('viewerAfter');
-  const slider = document.getElementById('slider');
-  const container = document.getElementById('container');
+const canvas = document.getElementById("sequence");
+const ctx = canvas.getContext("2d");
 
-  // Initialize two Panolens viewers, each in their container div
-  const viewerBefore = new PANOLENS.Viewer({
-    container: containerBefore,
-    controlBar: false,
-    autoHideInfospot: false,
-    output: 'console'
-  });
-  const viewerAfter = new PANOLENS.Viewer({
-    container: containerAfter,
-    controlBar: false,
-    autoHideInfospot: false,
-    output: 'console'
-  });
+const frameCount = 251;
+const images = [];
+let currentFrame = 1;       // Currently displayed frame
+let targetFrame = 1;        // Frame based on scroll
 
-  // Load panoramas
-  const panoramaBefore = new PANOLENS.ImagePanorama('before.jpg');
-  const panoramaAfter = new PANOLENS.ImagePanorama('after.jpg');
+const getFramePath = i => `images/NeuGarage_${i.toString().padStart(4,'0')}.png`;
 
-  viewerBefore.add(panoramaBefore);
-  viewerAfter.add(panoramaAfter);
-
-  // Disable interaction on the top viewer (after)
-  viewerAfter.control.enabled = false;
-
-  function syncCameras() {
-    // Sync orientation
-    viewerAfter.camera.position.copy(viewerBefore.camera.position);
-    viewerAfter.camera.quaternion.copy(viewerBefore.camera.quaternion);
-
-    // Sync zoom / field of view
-    viewerAfter.camera.fov = viewerBefore.camera.fov;
-    viewerAfter.camera.updateProjectionMatrix();
-
-    requestAnimationFrame(syncCameras);
+// Draw image on canvas
+function drawImage(img) {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const hRatio = canvas.width / img.width;
+  const vRatio = canvas.height / img.height;
+  const ratio = Math.min(hRatio, vRatio);
+  const x = (canvas.width - img.width * ratio)/2;
+  const y = (canvas.height - img.height * ratio)/2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, img.width, img.height, x, y, img.width*ratio, img.height*ratio);
 }
-syncCameras();
 
-  // Slider drag logic
-  let isDragging = false;
-
-  slider.addEventListener('mousedown', startDrag);
-  window.addEventListener('mouseup', stopDrag);
-  window.addEventListener('mousemove', onDrag);
-
-  // Touch events for mobile
-  slider.addEventListener('touchstart', startDrag, {passive:false});
-  window.addEventListener('touchend', stopDrag);
-  window.addEventListener('touchmove', onDrag, {passive:false});
-
-  function startDrag(e) {
-    e.preventDefault();
-    isDragging = true;
+// Lazy load frame
+function loadFrame(i) {
+  if (!images[i]) {
+    const img = new Image();
+    img.src = getFramePath(i);
+    img.onload = () => {
+      if (i === currentFrame) drawImage(img);
+    };
+    img.onerror = () => console.error("❌ Missing file:", img.src);
+    images[i] = img;
   }
+  return images[i];
+}
 
-  function stopDrag(e) {
-    if (isDragging) {
-      e.preventDefault();
-      isDragging = false;
+// Preload first frame
+loadFrame(1);
+
+// Scroll handler updates target frame
+function onScroll() {
+  const scrollTop = window.scrollY;
+  const maxScroll = document.body.scrollHeight - window.innerHeight;
+  if (maxScroll <= 0) return;
+  const scrollFraction = Math.min(1, Math.max(0, scrollTop / maxScroll));
+  targetFrame = Math.floor(scrollFraction * (frameCount - 1)) + 1;
+
+  // Preload a small buffer around targetFrame
+  for (let i = targetFrame - 5; i <= targetFrame + 5; i++) {
+    if (i >= 1 && i <= frameCount) loadFrame(i);
+  }
+}
+
+window.addEventListener("scroll", onScroll);
+window.addEventListener("resize", () => {
+  if (images[currentFrame] && images[currentFrame].complete) drawImage(images[currentFrame]);
+});
+
+// Animate current frame toward target frame
+function animate() {
+  if (currentFrame !== targetFrame) {
+    const diff = targetFrame - currentFrame;
+    // move fractionally toward target for smoothness
+    currentFrame += Math.sign(diff) * Math.min(Math.abs(diff), 1);
+    if (images[Math.round(currentFrame)] && images[Math.round(currentFrame)].complete) {
+      drawImage(images[Math.round(currentFrame)]);
     }
   }
-
-  function onDrag(e) {
-    if (!isDragging) return;
-
-    e.preventDefault();
-    let clientX = e.clientX;
-    if (e.touches) clientX = e.touches[0].clientX;
-
-    // Clamp slider position between 0 and container width
-    const rect = container.getBoundingClientRect();
-    let posX = clientX - rect.left;
-    if (posX < 0) posX = 0;
-    if (posX > rect.width) posX = rect.width;
-
-    // Move slider line
-    slider.style.left = posX + 'px';
-
-    // Adjust clip-path on the top panorama viewer accordingly
-    containerAfter.style.clipPath = `inset(0 0 0 ${posX}px)`;
-  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
 </script>
-
 </body>
 </html>
